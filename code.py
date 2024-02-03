@@ -7,272 +7,205 @@
 
 
 %%writefile BizCardX.py
-import streamlit as st
+%%writefile sy.py
 import pandas as pd
+import numpy as np
+import streamlit as st
 import easyocr
-import streamlit  as st
-from PIL import Image
-import re
+import cv2
 import sqlite3
+import time
+from streamlit_option_menu import option_menu
 
-#Streamlit part
-
-st.set_page_config(page_title="BizcardX", page_icon="🚀",layout= "wide")
-
-
-SELECT = option_menu(
-    menu_title = None,
-    options = ["Home", "Data Management","Contact"],
-    icons =["🏡","🌍","🔚"],
-    default_index=2,
-    orientation="horizontal",
-    styles={"container": {"padding": "0!important", "background-color": "white","size":"cover", "width": "100%"},
-        "icon": {"color": "violet", "font-size": "20px"},
-        "nav-link": {"font-size": "20px", "text-align": "center", "margin": "-2px", "--hover-color": "#ff9933"},
-        "nav-link-selected": {"background-color": "#ff9933"}})
-
-
-# SETTING-UP BACKGROUND IMAGE
-def setting_bg():
-    st.markdown(f""" <style>.stApp {{
-                        background: url("https://wallpapercave.com/wp/wp4478006.jpg");
-                        background-size: cover}}
-                     </style>""",unsafe_allow_html=True)
-setting_bg()
-
-
-if SELECT == "Home":
-    col1,col2,col3 = st.columns(3)
-    path = '/content/OCR3.png'
-    photo = Image.open(path)
-    col2.image(photo,width = 250)
-
-    st.header(":rainbow[BizCardX: Extracting Business Card Data with OCR]")
-    st.write()
-
-    st.markdown("## :green[**Technologies Used :**] Python,easy OCR, Streamlit, SQL, Pandas")
-    st.markdown("""## :green[**Overview :**] """Introducing BizCardX, a cutting-edge Streamlit application designed to seamlessly
-                streamline the extraction of business card data through advanced Optical Character Recognition (OCR) technology.
-                Users can effortlessly upload business card images, gaining instant access to vital details such as company names,
-                cardholder information, and contact details. Emphasizing robust data security and user authentication, BizCardX
-                ensures safe data storage while providing simplified management through its intuitive Streamlit User Interface.
-                Immerse yourself in an efficient, secure, and user-friendly solution for effortlessly managing and organizing
-                business card information with BizCardX.""")
-
-
-#Main code
-def extract_data(A):
-  try:
-    image = Image.open(A)
-    read = easyocr.Reader(["en"], gpu = True)
-    text = read.readtext(A, detail = False)
-  except:
-    st.warning("Invalid Image")
-  return image, text
-
-
-def images(text):
-
-  data = {"Name" : [], 'Role' : [],'Websites': [], 'Gmail': [], 'Phone Number': [],"Company Name" : [], "Address" : [], 'Pincode': []}
-  try:
-    for texts in text:
-
-      if "www " in texts or "www." in texts or "WWW" in texts or 'wWW' in texts or 'wwW' in texts or re.search(r"\b(?:www|global\.com)\b, re.IGNORECASE" ,texts):
-        data['Websites'].append(texts)
-      elif "@" in texts:
-        data['Gmail'].append(texts)
-      elif "+" in texts or "+91" in texts or re.search(r'\b(\d{3}-\d{3}-\d{4})\b', texts) or re.search(r'\+(\d{2})-(\d{3})-(\d{4})', texts):
-        phone_number_match = re.search(r'\b(\d{3}-\d{3}-\d{4})\b', texts) or re.search(r'\+(\d{2})-(\d{3})-(\d{4})', texts)
-        if phone_number_match:
-            phone_number = phone_number_match.group(0)
-            data['Phone Number'].append(phone_number)
-      elif re.search(r'\b(\d{6}|\d{7})\b', texts):
-        pin_code_match = re.search(r'\b(\d{6}|\d{7})\b', texts)
-        if pin_code_match:
-            pin_code = pin_code_match.group(1)
-            data["Pincode"].append(pin_code)
-      elif re.findall(r"^(\d+\s+\w+\s+\w+\s+(?:[A-Z][a-z]+(?:\s[A-Z][a-z]+)?)?)", texts):
-         street_match = (r"^(\d+\s+\w+\s+\w+\s+(?:[A-Z][a-z]+(?:\s[A-Z][a-z]+)?)?)", texts)
-         data["Address"].append(street_match[1])
-      elif re.findall(r'(\d+\s+[A-Za-z\s,]+?)\s*,\s*([A-Za-z]+),\s*([A-Za-z]+);', texts):
-        addresses = re.findall(r'(\d+\s+[A-Za-z\s,]+?)\s*,\s*([A-Za-z]+),\s*([A-Za-z]+);', texts)
-        data["Address"].extend(addresses)
-      elif re.findall(r'^\d+\s*[A-Za-z,]+$', texts):
-        addresses = re.findall(r'^\d+\s*[A-Za-z,]+$', texts)
-        data["Address"].extend(addresses)
-      elif re.findall(r'^[A-Z]+$', texts ):
-         addresses = re.findall(r'^[A-Z]+$', texts)
-         data["Company Name"].extend(addresses)
-      elif re.findall(r'\b[A-Z][a-z]*\b', texts) :
-         addresses = re.findall(r'\b[A-Z][a-z]*\b', texts)
-         data["Company Name"].extend(addresses)
-      elif re.findall(r'^[a-z]+$', texts) :
-         addresses = re.findall(r'^[a-z]+$', texts)
-         data["Company Name"].extend(addresses)
-
-    state_pattern = re.compile(r'\b([A-Za-z\s]+)\s+\d{6}\b')
-    states = [state_pattern.search(s).group(1) for s in text if state_pattern.search(s)]
-    data["Address"].append(states)
-
-    state_pattern = re.compile(r'\b([A-Za-z\s]+)\s+\d{7}\b')
-    states = [state_pattern.search(s).group(1) for s in text if state_pattern.search(s)]
-    data["Address"].append(states)
-    if text[0]:
-      A = text[0]
-      data["Name"].append(A)
-    if text[1]:
-      B = text[1]
-      data["Role"].append(B)
-
-  except:
-        st.warning("Issue in Selecting the Text in Image")
-  return data
-
-
-def final(A):
-  try:
-    A['Company Name'] = A['Company Name'][-2:]
-    A['Company Name'] = ' '.join(A['Company Name'])
-    A["Address"] = [item for item in A['Address'] if item]
-
-    if "Address" in A and len(A["Address"]) == 2:
-      A['Address'][1] = A['Address'][1][0]
-      A["Street"] =  A["Address"][0].split(",")[0].strip()
-      A["City"] =  A["Address"][0].split(",")[1].strip()
-      A["State"]  =   A["Address"][1]
-
-    if ';' in A["Address"][0]:
-      A["Address"][0] = A["Address"][0].replace(';', ',')
-
-    A["Address"] = str(A['Address']).replace('(', '').replace(')', '')
-    W = eval(A["Address"])
-    A["Address"] = [item.strip() for item in W]
-
-    if "Address" in A and len(A["Address"]) == 1:
-      A["Street"] =  A["Address"][0].split(",")[0].strip()
-      A["City"] =  A["Address"][0].split(",")[1].strip()
-      A["State"]  = A["Address"][0].split(",")[2].strip()
-    if len(A.get("Address", [])) >= 3:
-      A["Street"] = A['Address'][0]
-      A["City"] = A['Address'][1]
-      A["State"] = A['Address'][2]
-
-    A["Phone Number"] = [', '.join(A["Phone Number"])]
-    A["Address"] = [', '.join(A["Address"])]
-    for key, value in A.items():
-      if not isinstance(value, list):
-        A[key] = [value]
-
-  except:
-      st.warning("Issue in Pre-proccessing")
-
-  return 'success'
-
-
-if choice == 'EXPLORE':
-    st.header(":orange[EXPLORE]")
-    uploader = st.file_uploader("Upload Image To Fetch Text",type = ["png","jpg",'jpeg'])
-    if uploader:
-      with st.spinner("Please wait.."):
-        image, text = extract_data(uploader.name)
-        st.image(image)
-        #st.success("Successfully Displayed Image")
-
-
-def last(uploader):
-   image, text = extract_data(uploader.name)
-   data = images(text)
-   final(data)
-   return data
-
-if choice == 'EXPLORE':
-  if uploader:
-    if st.button("Fetch Text"):
-      with st.spinner("Please Wait..."):
-        F = last(uploader)
-        df = pd.DataFrame(F)
-        st.write(df)
-        st.success("Text Successfully Fetched!")
-
-
-conn = sqlite3.connect('Bizdb')
+# Connect to sqlite3 database
+conn = sqlite3.connect('Business_card_info.db')
 cur = conn.cursor()
-cur.execute("CREATE TABLE IF NOT EXISTS Cards(Name, Role, Websites,Gmail,Phone Number,Company Name,Address,Pincode,Street,City,State)")
+
+# Create a table to store the business card information
+cur.execute('''CREATE TABLE IF NOT EXISTS Business_card
+              (id INT AUTO_INCREMENT PRIMARY KEY,
+              name TEXT,
+              position TEXT,
+              address TEXT,
+              pincode VARCHAR(25),
+              phone VARCHAR(25),
+              email TEXT,
+              website TEXT,
+              company TEXT
+              )''')
+
+# Using easyOCR for reading data
+reader = easyocr.Reader(['en'])
+
+# Set the page title and page icon
+st.set_page_config(page_title= "BizCardX", page_icon=':credit_card:', layout='wide')
+
+#st.sidebar.image("/content/business-card-icon-1.png")
+
+# Create a sidebar menu with options to Add, Show, Update business card information
+
+with st.sidebar:
+    selected = option_menu(None, ["🏡Home","🌏Data Management","🙏My-Profile"],
+                          #icons=["","",""],
+                          default_index=0,
+                          orientation="vertical",
+                          styles={"nav-link": {"font-size": "35px", "text-align": "centre", "margin": "0px", "--hover-color": "#6495ED"},
+                                  "icon": {"font-size": "20px"},
+                                  "container" : {"max-width": "6000px"},
+                                  "nav-link-selected": {"background-color": "#6495ED"}})
 
 
 
-if choice == "MODIFY":
-  st.header(":blue[MODIFY]")
-  uploaders = st.file_uploader("Upload Image To Fetch Text",type = ["png","jpg",'jpeg'])
-  if uploaders:
-      with st.spinner("Please Wait..."):
-        F = last(uploaders)
-        df = pd.DataFrame(F)
-        st.write(df)
-        st.success("Text Successfully Fetched!")
-        if 'df':
-            A = st.subheader("MODIFY")
-            B = st.text_input("Name",df["Name"][0])
-            C = st.text_input("Role",df['Role'][0])
-            Z = st.text_input("Websites",df['Websites'][0])
-            D = st.text_input("Gmail",df['Gmail'][0])
-            E = st.text_input("Phone Number",df['Phone Number'][0])
-            F = st.text_input("Company Name",df['Company Name'][0])
-            G = st.text_input("Address",df['Address'][0])
-            H = st.text_input("Street",df['Street'][0])
-            I = st.text_input("City",df['City'][0])
-            J = st.text_input("Pincode",df['Pincode'][0])
-            K = st.text_input("State",df['State'][0])
-            if st.button("Insert Into SQLITE3"):
-              with st.spinner("Please Wait..."):
-                query = """INSERT INTO Cards VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)"""
-                values = (B, C, Z, D, E, F, G, H, I, J, K)
-                cur.execute(query, values)
+
+
+if selected == "🏡Home":
+    col1,col2,col3 =st.columns(3)
+    with col2:
+       st.image("/content/business-card-icon-1.png")
+    st.title(":blue[BizCardX: Extracting Business Card Data with OCR]")
+    st.subheader(":red[**Technologies**]")
+    st.write("------------------------------------------------")
+    st.markdown("👉 Python")
+    st.write("Python is a computer programming language often used to build websites and software, automate tasks, and analyze data.")
+    st.markdown("👉 EasyOCR")
+    st.write("EasyOCR is a Python computer language Optical Character Recognition (OCR) module that is both flexible and easy to use. OCR technology is useful for a variety of tasks, including data entry automation and image analysis. It enables computers to identify and extract text from photographs or scanned documents.")
+    st.markdown("👉 Streamlit")
+    st.write("Streamlit is a promising open-source Python library, which enables developers to build attractive user interfaces in no time.")
+    st.markdown("👉 Sqlite3")
+    st.write("A standalone command-line shell program called sqlite3 is provided in SQLite's distribution. It can be used to create a database, define tables, insert and change rows, run queries and manage an SQLite database file. ")
+    st.markdown("👉 Pandas")
+    st.write("Pandas is a Python library used for working with data sets. It has functions for analyzing, cleaning, exploring, and manipulating data.")
+    st.write("------------------------------------------------")
+    st.subheader(":green[**Outline**]")
+    st.write("-------------------------------------------------")
+    st.markdown("🟩 In this streamlit web app you can upload an image of a business card and extract relevant information from it using easyOCR")
+    st.markdown("🟩 You can view, modify or delete the extracted data in this app")
+    st.markdown("🟩 This app would also allow users to save the extracted information into a database along with the uploaded business card image")
+    st.markdown("🟩 The database would be able to store multiple entries, each with its own business card image and extracted info")
+    st.write("------------------------------------------------")
+
+if selected == "🌏Data Management":
+
+    #data = ['Insert Data', 'Show Data', 'Edit Card Info', 'Delete Data']
+    choose = st.sidebar.selectbox("**BizCardX**",('select','Insert Data', 'Show Data', 'Edit Card Info', 'Delete Data'))
+
+    if choose == 'Insert Data':
+
+        # Create a file uploader
+        file_upload = st.file_uploader(":green[UPLOAD CARD IMAGE>>>:credit_card:]",
+                                        type=["jpg", "jpeg", "png", "tiff", "tif", "gif"])
+
+        if file_upload is not None:
+
+            # Read the image using OpenCV
+            image = cv2.imdecode(np.fromstring(file_upload.read(), np.uint8), 1)
+
+            # Display the uploaded image
+            st.image(image, caption='Uploaded Successfully', use_column_width=True)
+
+            # Button to extract information from the image
+            if st.button('Extract Data And Added'):
+                bsc = reader.readtext(image, detail=0)
+                text = "\n".join(bsc)
+
+                # Insert the extracted information and image into the database
+                sql_data = "INSERT INTO Business_card (name, position, address, pincode, phone, email, website, company) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?)"
+                values = (bsc[0], bsc[1], bsc[2], bsc[3], bsc[4], bsc[5], bsc[6], bsc[7])
+                cur.execute(sql_data, values)
                 conn.commit()
+                with st.spinner("Wait for it...."):
+                    time.sleep(5)
 
-            if st.button("VIEW"):
-              with st.spinner("Please Wait..."):
-                result = cur.execute("select * from Cards")
-                X = result.fetchall()
-                P = pd.DataFrame(X,columns = ["Name",'Role','Websites','Gmail','Phone Number' ,'Company Name','Address','Pincode','Street','City','State'])
-                st.write(P)
-                # st.button("CLEAR")
+                # Display message
+                st.success("Data Inserted")
 
+    elif choose == 'Show Data':
 
-
-
-if choice == "EXPLORE MORE":
-    st.header(":red[EXPLORE MORE]")
-    uploaderss = st.file_uploader("Upload Image To Fetch Text",type = ["png","jpg",'jpeg'])
-    if uploaderss:
-      if st.button("FETCH"):
-        with st.spinner("Wait.."):
-          image, text = extract_data(uploaderss.name)
-          st.image(image)
-          st.success("Successfully Fetched Image")
-          st.write(text)
-          df = pd.DataFrame(text, columns = ["*TEXT DATA*"])
-          st.write(df)
-          st.success("Successfully Fetched Text From Image")
-          st.button("Clear")
+        # Display the stored business card information
+        cur.execute("SELECT * FROM Business_card")
+        result = cur.fetchall()
+        df = pd.DataFrame(result,
+                          columns=['id', 'name', 'position', 'address', 'pincode', 'phone', 'email', 'website', 'company'])
+        st.write(df)
+        st.snow()
 
 
-if choice=='DELETE':
-  st.header(":orange[DELETE]")
-  M = st.selectbox("Select Name",['Select Name','Selva',"KARTHICK",'REVANTH','SANTHOSH'])
-  if M!="Select Name":
-    if st.button('Delete From SQLITE3'):
-      with st.spinner("Please Wait.."):
-        delete_query = "DELETE FROM Cards WHERE Name = ?"
-        cur.execute(delete_query, (M,))
-        conn.commit()
-  if st.button("VIEW"):
-          with st.spinner("Please Wait..."):
-            result = cur.execute("select * from Cards")
-            X = result.fetchall()
-            P = pd.DataFrame(X,columns = ["Name",'Role','Websites','Gmail','Phone Number' ,'Company Name','Address','Pincode','Street','City','State'])
-            st.write(P)
-            st.button("CLEAR")
+    elif choose == 'Edit Card Info':
+
+        # Create a dropdown menu to select a business card to edit
+        cur.execute("SELECT id, name FROM Business_card")
+        result = cur.fetchall()
+        business_cards = {}
+
+        for row in result:
+            business_cards[row[1]] = row[0]
+        select_card_name = st.selectbox("Select Card To Edit", list(business_cards.keys()))
+
+        # Get the current information for the selected business card
+        cur.execute("SELECT * FROM Business_card WHERE name=?", (select_card_name,))
+        result = cur.fetchone()
+
+        # Get edited information
+        name = st.text_input("Name", result[1])
+        position = st.text_input("Position", result[2])
+        address = st.text_input("Address", result[3])
+        pincode = st.text_input("Pincode", result[4])
+        phone = st.text_input("Phone", result[5])
+        email = st.text_input("Email", result[6])
+        website = st.text_input("Website", result[7])
+        company = st.text_input("Company_Name", result[8])
+
+
+        # Create a button to update the business card
+        if st.button("Edit Card Data"):
+            # Update the information for the selected business card in the database
+            cur.execute(
+                "UPDATE Business_card SET name=?, position=?, address=?, pincode=?, phone=?, email=?, website=?, company=? WHERE name=?",
+                (name, position, address, pincode, phone, email, website, company, select_card_name))
+            conn.commit()
+            st.success("Card Data Updated")
+            st.balloons()
+
+    if choose == 'Delete Data':
+
+        # Create a dropdown menu to select a business card to delete
+        cur.execute("SELECT id, name FROM Business_card")
+        result = cur.fetchall()
+        business_cards = {}
+
+        for row in result:
+            business_cards[row[1]] = row[0]
+        select_card_name = st.selectbox("Select Card To Delete", list(business_cards.keys()))
+
+        # Create a button to delete the selected business card
+        if st.button("Delete Card"):
+            # Delete the selected business card from the database
+            cur.execute("DELETE FROM Business_card WHERE name=?", (select_card_name,))
+            conn.commit()
+            st.success("⚠Card Data Deleted")
+
+
+if selected == "🙏My-Profile":
+    name = "kaleeswari S"
+    mail = (f'{"Mail :"}  {"kaleeswariramkumar25@gmail.com"}')
+    description = "An Aspiring DATA-SCIENTIST..!"
+    social_media = {
+        "Youtube": "http://www.youtube.com/@RKaleeswari-08",
+        "GITHUB": "https://github.com/Kaleeswari-S",
+        "LINKEDIN": "https://www.linkedin.com/in/kaleeswari-s-081a392a6/",
+        "KAGGLE": "https://www.kaggle.com/rkaleeswari"}
+
+    col1, col2 = st.columns(2)
+    with col2:
+        st.title('Insights, What I learn from this Project')
+        st.write("")
+        st.write("---")
+        st.subheader(mail)
+    st.write("#")
+    cols = st.columns(len(social_media))
+    for index, (platform, link) in enumerate(social_media.items()):
+        cols[index].write(f"[{platform}]({link})")
+
 
 !npm install localtunnel
 
