@@ -83,4 +83,16 @@ By following this workflow, you can successfully develop a Streamlit application
 # Conclusion
 The result of this project is a functional Streamlit application that enables users to upload business card images, extract relevant information using easyOCR, and display the extracted details in a clean and organized graphical user interface (GUI). The application allows users to save the extracted information and associated images into a database, supporting multiple entries. Python, Streamlit, easyOCR, and a database management system (e.g., SQLite or MySQL) are used for development. The application features a user-friendly interface for easy image upload and information extraction. Users can add, read, update, and delete data through the Streamlit UI. The project requires expertise in image processing, OCR, GUI development, and database management. Careful consideration is given to designing a scalable, maintainable, and extensible application architecture. Proper documentation and code organization are emphasized for clarity and future development.
 
+## 📹 Project Demo Video: https://lnkd.in/gkeJ_H86
+
+# Contributing
+Contributions to this project are welcome! If you encounter any issues or have suggestions for improvements, please feel free to submit a pull request.
+
+# @ Contact:
+📧 Email: kaleeswariramkumar25@gmail.com
+
+🌐 LinkedIn: linkedin.com/in/kaleeswari-s
+
+For any further questions or inquiries, feel free to reach out. We are happy to assist you with any queries.
+
 
